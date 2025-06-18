@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles_admin.css') }}">
+</head>
+<body>
+    <div class="flash-message" id="flash-message"></div>
+    <h2>Panel de Administración</h2>
+
+    <!-- Crear Usuario -->
+    <div class="form-container">
+        <h3>Crear Usuario</h3>
+        <form action="/admin/crear_usuario" method="POST">
+            <label for="user_username">Nombre de usuario:</label>
+            <input type="text" name="user_username" required>
+            <label for="user_email">Email del usuario:</label>
+            <input type="email" name="user_email" required>
+            <label for="user_password">Contraseña:</label>
+            <input type="password" name="user_password" required>
+            <label for="user_rol">Rol:</label>
+            <select name="user_rol">
+                <option value="cliente">Cliente</option>
+                <option value="admin">Admin</option>
+            </select>
+            <button type="submit">Crear Usuario</button>
+        </form>
+    </div>
+
+    <!-- Actualizar Usuario -->
+    <div class="form-container">
+        <h3>Actualizar Usuario</h3>
+        <form action="/admin/actualizar_usuario" method="POST">
+            <label for="update_user_email">Email del usuario a actualizar:</label>
+            <input type="email" name="update_user_email" required>
+            <label for="update_user_password">Nueva Contraseña:</label>
+            <input type="password" name="update_user_password">
+            <label for="update_user_rol">Nuevo Rol:</label>
+            <select name="update_user_rol">
+                <option value="cliente">Cliente</option>
+                <option value="admin">Admin</option>
+            </select>
+            <button type="submit">Actualizar Usuario</button>
+        </form>
+    </div>
+
+    <!-- Eliminar Usuario -->
+    <div class="form-container">
+        <h3>Eliminar Usuario</h3>
+        <form action="/admin/eliminar_usuario" method="POST">
+            <label for="delete_user_email">Email del usuario a eliminar:</label>
+            <input type="email" name="delete_user_email" required>
+            <button type="submit">Eliminar Usuario</button>
+        </form>
+    </div>
+
+    <!-- Crear Producto -->
+    <div class="form-container">
+        <h3>Crear Producto</h3>
+        <form action="/admin/crear_producto" method="POST">
+            <label for="product_name">Nombre del producto:</label>
+            <input type="text" name="product_name" required>
+            <label for="product_description">Descripción:</label>
+            <input type="text" name="product_description" required>
+            <label for="product_price">Precio:</label>
+            <input type="number" step="0.01" name="product_price" required>
+            <button type="submit">Crear Producto</button>
+        </form>
+    </div>
+
+    <!-- Actualizar Producto -->
+    <div class="form-container">
+        <h3>Actualizar Producto</h3>
+        <form action="/admin/actualizar_producto" method="POST">
+            <label for="update_product_id">ID del producto a actualizar:</label>
+            <input type="number" name="update_product_id" required>
+            <label for="update_product_name">Nuevo nombre:</label>
+            <input type="text" name="update_product_name">
+            <label for="update_product_description">Nueva descripción:</label>
+            <input type="text" name="update_product_description">
+            <label for="update_product_price">Nuevo precio:</label>
+            <input type="number" step="0.01" name="update_product_price">
+            <button type="submit">Actualizar Producto</button>
+        </form>
+    </div>
+
+    <!-- Eliminar Producto -->
+    <div class="form-container">
+        <h3>Eliminar Producto</h3>
+        <form action="/admin/eliminar_producto" method="POST">
+            <label for="delete_product_id">ID del producto a eliminar:</label>
+            <input type="number" name="delete_product_id" required>
+            <button type="submit">Eliminar Producto</button>
+        </form>
+    </div>
+
+</body>
+</html>

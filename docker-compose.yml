@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  db2:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: myuser2
+      POSTGRES_PASSWORD: mypassword2
+      POSTGRES_DB: productos
+    ports:
+      - "5433:5432" 
+    volumes:
+      - postgres_data2:/var/lib/postgresql/data
+
+  web:
+    restart: always
+    build: 
+      context: ./user
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://myuser:mypassword@db:5432/mydatabase
+    depends_on:
+      - db
+
+  web2:
+    restart: always
+    build: 
+      context: ./product
+    ports:
+      - "5001:5001"
+    environment:
+      DATABASE_URL2: postgresql://myuser2:mypassword2@db2:5432/productos 
+    depends_on:
+      - db2
+
+  web3:
+    restart: always
+    build: 
+      context: ./auth
+    ports:
+      - "5002:5002"
+    depends_on:
+      - web
+
+
+volumes:
+  postgres_data:
+  postgres_data2:

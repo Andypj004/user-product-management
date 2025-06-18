@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles_productos.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>Productos Disponibles</h2>
+
+        {% if productos %}
+            <div class="product-list">
+                <ul>
+                    {% for producto in productos %}
+                        <li class="product-item">
+                            <span class="product-name">{{ producto.name }}</span>
+                            <span class="product-price">${{ producto.price }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% else %}
+            <p class="no-products">No hay productos disponibles.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
