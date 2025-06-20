@@ -1,5 +1,5 @@
 curl -X POST http://localhost:5000/users   -H "Content-Type: application/json" -d '{
-    "username": "admin,
+    "username": "admin",
     "email": "admin@example.com",
     "password": "admin",
     "rol": "admin"

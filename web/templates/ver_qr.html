@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Configura tu autenticador</title>
+</head>
+<body>
+    <h2>Escanea este código QR con Google Authenticator</h2>
+    <p>Email: {{ email }}</p>
+    <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR Code 2FA">
+    <br><br>
+    <!-- <a href="{{ url_for('admin.admin_dashboard') }}">Volver al panel de administración</a> -->
+</body>
+</html>

@@ -1,172 +1,171 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, request, jsonify, send_file
 import requests
+import os
+import pyotp
+import qrcode
+import io
+import base64
+import time
+from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'clave_secreta'
 
-USUARIOS_SERVICE_URL = "http://web:5000/users"
-PRODUCTS_SERVICE_URL = 'http://web2:5001/products'
+USERS_SERVICE_URL = "http://web:5000"
 
-@app.route('/')
-def home():
-    return redirect(url_for('login'))
+def get_user_secret(email):
+    resp = requests.get(f"{USERS_SERVICE_URL}/users/{email}/secret")
+    if resp.status_code == 200:
+        return resp.json().get("secret_key")
+    return None
 
-@app.route("/login", methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+@app.route('/auth/generate_otp/<string:email>', methods=['GET'])
+def generate_otp(email):
+    secret = get_user_secret(email)
+    totp = pyotp.TOTP(secret)
+    otp_uri = totp.provisioning_uri(name=email, issuer_name="UserProductApp")
+    return jsonify({'otp_uri': otp_uri})
 
-        try:
-            resp = requests.get(f"{USUARIOS_SERVICE_URL}/{email}")
-            if resp.status_code == 200:
-                user = resp.json()
-                if user['password'] == password:
-                    if user['rol'] == 'cliente':
-                        return redirect(url_for('listar_productos'))
-                    elif user['rol'] == 'admin':
-                        return redirect(url_for('admin_dashboard'))
-                    else:
-                        flash("Rol no reconocido.")
-                else:
-                    flash("Contraseña incorrecta")
-            else:
-                flash("Usuario no encontrado")
-        except Exception as e:
-            flash(f"Error al conectar con el servicio: {str(e)}")
+@app.route('/auth/generate_qr/<string:email>', methods=['GET'])
+def generate_qr(email):
+    secret = get_user_secret(email)
+    if not secret:
+        return jsonify({'error': 'No se pudo obtener la clave secreta'}), 404
 
-        return redirect(url_for('login'))
+    totp = pyotp.TOTP(secret)
+    otp_uri = totp.provisioning_uri(name=email, issuer_name="UserProductApp")
 
-    return render_template("login.html")
+    img = qrcode.make(otp_uri)
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
 
-@app.route('/admin')
-def admin_dashboard():
-    return render_template("admin.html")
+    # Codificar imagen en base64
+    img_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-@app.route('/admin/crear_usuario', methods=['POST'])
-def crear_usuario():
-    email = request.form['user_email']
-    password = request.form['user_password']
-    rol = request.form['user_rol']
+    return jsonify({'qr_code_base64': img_base64})
+
+@app.route('/auth/debug/<string:email>', methods=['GET'])
+def debug_totp(email):
+    """Endpoint para debug - eliminar en producción"""
+    secret = get_user_secret(email)
+    if not secret:
+        return jsonify({'error': 'No se encontró clave secreta'}), 404
     
-    data = {'email': email, 'password': password, 'rol': rol}
-    try:
-        response = requests.post(f"{USUARIOS_SERVICE_URL}", json=data)
-        if response.status_code == 201:
-            flash("Usuario creado con éxito.")
+    totp = pyotp.TOTP(secret)
+    current_time = int(time.time())
+    
+    # Generar códigos para diferentes ventanas de tiempo
+    debug_info = {
+        'secret': secret,
+        'current_timestamp': current_time,
+        'current_datetime': datetime.fromtimestamp(current_time).isoformat(),
+        'current_code': totp.now(),
+        'codes_window': {}
+    }
+    
+    # Verificar códigos en una ventana de ±3 minutos
+    for offset in range(-3, 4):
+        timestamp = current_time + (offset * 30)  # 30 segundos por ventana
+        code = totp.at(timestamp)
+        debug_info['codes_window'][f'offset_{offset}'] = {
+            'timestamp': timestamp,
+            'datetime': datetime.fromtimestamp(timestamp).isoformat(),
+            'code': code
+        }
+    
+    return jsonify(debug_info)
+
+@app.route('/auth/verify', methods=['POST'])
+def verify_token():
+    data = request.get_json()
+    token = data.get('token')
+    email = data.get('email')
+
+    print(f"Verificando código para: {email}", flush=True)
+    print(f"Código recibido: {token}", flush=True)
+
+    secret = get_user_secret(email)
+    print(f"Secreto usado: {secret}", flush=True)
+
+    if not secret:
+        return jsonify({'verified': False, 'error': 'No se encontró clave secreta'}), 404
+
+    # Verificar que el token sea numérico y tenga 6 dígitos
+    if not token or not token.isdigit() or len(token) != 6:
+        print(f"Token inválido: {token}", flush=True)
+        return jsonify({'verified': False, 'error': 'Token debe ser 6 dígitos'}), 400
+
+    totp = pyotp.TOTP(secret)
+    current_time = int(time.time())
+    current_code = totp.now()
+    
+    print(f"Timestamp actual: {current_time}", flush=True)
+    print(f"Fecha/hora actual: {datetime.fromtimestamp(current_time)}", flush=True)
+    print(f"Código actual esperado: {current_code}", flush=True)
+
+    # Intentar verificar con ventana más amplia para debug
+    for window in [1, 2, 3]:
+        if totp.verify(token, valid_window=window):
+            print(f"Código verificado exitosamente con ventana: {window}", flush=True)
+            return jsonify({'verified': True}), 200
         else:
-            flash("Error al crear el usuario.")
-    except Exception as e:
-        flash(f"Error al conectar con el servicio de usuarios: {str(e)}")
-    
-    return redirect(url_for('admin_dashboard'))
+            print(f"Falló verificación con ventana: {window}", flush=True)
 
-@app.route('/admin/actualizar_usuario', methods=['POST'])
-def actualizar_usuario():
-    email = request.form['update_user_email']
-    new_password = request.form['update_user_password']
-    new_rol = request.form['update_user_rol']
+    # Si llega aquí, mostrar códigos de debug
+    print("=== DEBUG: Códigos en ventana de tiempo ===", flush=True)
+    for offset in range(-2, 3):
+        timestamp = current_time + (offset * 30)
+        code = totp.at(timestamp)
+        print(f"Offset {offset}: {code} (timestamp: {timestamp})", flush=True)
     
-    data = {}
-    if new_password:
-        data['password'] = new_password
-    if new_rol:
-        data['rol'] = new_rol
+    return jsonify({'verified': False}), 401
 
-    try:
-        response = requests.put(f"{USUARIOS_SERVICE_URL}/{email}", json=data)
-        if response.status_code == 200:
-            flash("Usuario actualizado con éxito.")
-        else:
-            flash("Error al actualizar el usuario.")
-    except Exception as e:
-        flash(f"Error al conectar con el servicio de usuarios: {str(e)}")
-    
-    return redirect(url_for('admin_dashboard'))
+@app.route('/auth/verify_enhanced', methods=['POST'])
+def verify_token_enhanced():
+    """Versión mejorada de verificación con mejor manejo de errores"""
+    data = request.get_json()
+    token = data.get('token', '').strip()
+    email = data.get('email', '').strip()
 
-@app.route('/admin/crear_producto', methods=['POST'])
-def crear_producto():
-    name = request.form['product_name']
-    price = request.form['product_price']
-    
-    data = {'name': name, 'price': price}
-    try:
-        response = requests.post(f"{PRODUCTS_SERVICE_URL}", json=data)
-        if response.status_code == 201:
-            flash("Producto creado con éxito.")
-        else:
-            flash("Error al crear el producto.")
-    except Exception as e:
-        flash(f"Error al conectar con el servicio de productos: {str(e)}")
-    
-    return redirect(url_for('admin_dashboard'))
+    if not email or not token:
+        return jsonify({
+            'verified': False, 
+            'error': 'Email y token son requeridos'
+        }), 400
 
-@app.route('/admin/actualizar_producto', methods=['POST'])
-def actualizar_producto():
-    product_id = request.form['update_product_id']
-    new_name = request.form['update_product_name']
-    new_price = request.form['update_product_price']
-    
-    data = {}
-    if new_name:
-        data['name'] = new_name
-    if new_price:
-        data['price'] = new_price
+    # Validar formato del token
+    if not token.isdigit() or len(token) != 6:
+        return jsonify({
+            'verified': False, 
+            'error': 'El token debe contener exactamente 6 dígitos'
+        }), 400
+
+    secret = get_user_secret(email)
+    if not secret:
+        return jsonify({
+            'verified': False, 
+            'error': 'No se encontró clave secreta para el usuario'
+        }), 404
 
     try:
-        response = requests.put(f"{PRODUCTS_SERVICE_URL}/{product_id}", json=data)
-        if response.status_code == 200:
-            flash("Producto actualizado con éxito.")
+        totp = pyotp.TOTP(secret)
+        
+        # Verificar con ventana de tolerancia
+        # valid_window=2 permite ±60 segundos de diferencia
+        if totp.verify(token, valid_window=2):
+            return jsonify({'verified': True}), 200
         else:
-            flash("Error al actualizar el producto.")
+            return jsonify({
+                'verified': False, 
+                'error': 'Código 2FA incorrecto o expirado'
+            }), 401
+            
     except Exception as e:
-        flash(f"Error al conectar con el servicio de productos: {str(e)}")
-    
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/eliminar_usuario', methods=['POST'])
-def eliminar_usuario():
-    email = request.form['delete_user_email']
-    
-    try:
-        response = requests.delete(f"{USUARIOS_SERVICE_URL}/{email}")
-        if response.status_code == 200:
-            flash("Usuario eliminado con éxito.")
-        else:
-            flash("Error al eliminar el usuario.")
-    except Exception as e:
-        flash(f"Error al conectar con el servicio de usuarios: {str(e)}")
-    
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/eliminar_producto', methods=['POST'])
-def eliminar_producto():
-    product_id = request.form['delete_product_id']
-    
-    try:
-        response = requests.delete(f"{PRODUCTS_SERVICE_URL}/{product_id}")
-        if response.status_code == 200:
-            flash("Producto eliminado con éxito.")
-        else:
-            flash("Error al eliminar el producto.")
-    except Exception as e:
-        flash(f"Error al conectar con el servicio de productos: {str(e)}")
-    
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/productos')
-def listar_productos():
-    try:
-        response = requests.get(PRODUCTS_SERVICE_URL)
-        if response.status_code == 200:
-            productos = response.json()
-            return render_template('productos.html', productos=productos)
-        else:
-            flash("Error al obtener productos del servicio.")
-            return render_template('productos.html', productos=[])
-    except Exception as e:
-        flash(f"Error al conectar con el servicio de productos: {str(e)}")
-        return render_template('productos.html', productos=[])
+        print(f"Error en verificación TOTP: {str(e)}", flush=True)
+        return jsonify({
+            'verified': False, 
+            'error': 'Error interno en verificación'
+        }), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)
+    app.run(host='0.0.0.0', port=5003, debug=True)

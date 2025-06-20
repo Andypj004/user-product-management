@@ -2,7 +2,7 @@
 FROM python:3.9-slim
 
 # Establecer el directorio de trabajo
-WORKDIR /app4
+WORKDIR /app3
 
 # Copiar los archivos requeridos
 COPY requirements.txt requirements.txt
@@ -12,9 +12,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Exponer el puerto en el que Flask se ejecuta
-EXPOSE 5003
+EXPOSE 5002
 
 # Comando para ejecutar la aplicación
 CMD ["python", "app.py"]
-
-ENV PYTHONUNBUFFERED=1
